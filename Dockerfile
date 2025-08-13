@@ -1,6 +1,6 @@
 FROM golang:1.24.6-alpine AS builder
 
-RUN apk add --no-cache build-base pkgconfig vips-dev pngquant
+RUN apk add --no-cache build-base musl-dev pkgconfig vips-dev pngquant
 
 WORKDIR /app
 COPY go.mod go.sum ./
