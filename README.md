@@ -67,7 +67,7 @@ The easiest way to deploy this server is by using the provided `Dockerfile` and 
           - "8080:8080"
         volumes:
           - ./config.yaml:/config/config.yaml
-          - ./output:/app/output
+          - ./output:/output
     ```
 
     Then, run the following command to build and start the server:
@@ -76,7 +76,23 @@ The easiest way to deploy this server is by using the provided `Dockerfile` and 
     docker-compose up --build -d
     ```
 
-    The server will now be running at `http://localhost:8080`.
+    Or with prebuilt image [ghcr.io/humanutopia/tinyimage-server:latest](https://github.com/HumanUtopia/tinyimage-server/pkgs/container/tinyimage-server)
+    ```yaml
+    version: '3.8'
+    services:
+      tinyimage-server:
+        image: ghcr.io/humanutopia/tinyimage-server
+        container_name: tinyimage-server
+        ports:
+          - "8080:8080"
+        volumes:
+          - ./config.yaml:/config/config.yaml
+          - ./output:/app/output
+      ```
+    ```bash
+    docker-compose up  -d
+    ```
+      The server will now be running at `http://localhost:8080`.
 
 ## API Documentation
 
@@ -99,7 +115,7 @@ curl http://localhost:8080/
 {
   "version": "v0.0.1",
   "download_url": "download/",
-  "max_upload_size_bytes": 10485760,
+  "max_upload_size_bytes": "10MB",
   "max_concurrent_tasks": 3
 }
 ```
@@ -112,9 +128,9 @@ curl http://localhost:8080/
 * `picture`: (file, required) The image file.
 * `format`: (string, optional) Output format (`webp`, `png`, `jpg`). Default is `webp`.
 * `quality`: (int, optional) For `jpg` format, 1-100. Default is `80`.
-  **Example:**
+* 
+**Example:**
 
-<!-- end list -->
 
 ```bash
 curl -X POST http://localhost:8080/upload \
@@ -133,6 +149,15 @@ curl -X POST http://localhost:8080/upload \
 }
 ```
 
+**Error:**
+
+```json
+{"message": "Image already processed for this format/quality",
+  "md5": "213d21f...",
+  "format": "png",
+  "quality": 80
+}
+```
 -----
 
 #### `GET /status/:md5` - Check Task Status
@@ -211,8 +236,14 @@ The server will send messages with status updates. When the image is processed, 
   ```
 * **Error:**
   ```json
+  {"status": "error", "message": "invalid_json"}
+  ```
+  ```json
   {"status": "error", "message": "unsupported_format"}
   ```
-    ```json
-  {"status": "error", "message": "unsupported_format"}
+  ```json
+  {"status": "size_exceeded", "message": "file too large"}
+  ```
+  ```json
+  {"status": "unsupported_format", "message": "only webp/png/jpg supported"}
   ```
