@@ -1,4 +1,4 @@
-FROM golang:1.21 AS builder
+FROM golang:1.24.6 AS builder
 
 # 安装 libvips 依赖
 RUN apt-get update && apt-get install -y \
@@ -18,7 +18,7 @@ FROM alpine
 
 RUN apk --update --no-cache add --no-cache vips-dev pngquant && rm -rf /var/cache/apk/*
 
-COPY --from=builder /app/image-compressor /usr/local/bin/image-compressor
+COPY --from=builder /app/tinyimage-server /usr/local/bin/tinyimage-server
 
 EXPOSE 8080
-ENTRYPOINT ["image-compressor"]
+ENTRYPOINT ["tinyimage-server"]
