@@ -14,9 +14,9 @@ COPY . .
 RUN go build -o image-compressor .
 
 # 生产镜像
-FROM debian:bullseye-slim
+FROM alpine
 
-RUN apk update && apk add --no-cache vips-dev pngquant && rm -rf /var/cache/apk/*
+RUN apk --update --no-cache add --no-cache vips-dev pngquant && rm -rf /var/cache/apk/*
 
 COPY --from=builder /app/image-compressor /usr/local/bin/image-compressor
 
