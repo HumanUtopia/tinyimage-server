@@ -16,6 +16,7 @@ import (
 	"image/png"
 	"io"
 	"log"
+	"mime/multipart"
 	"os"
 	"os/exec"
 	"strconv"
@@ -29,19 +30,14 @@ import (
 	"github.com/spf13/viper"
 )
 
-// ===========================
-// 结构优化与重复处理控制
-// ===========================
-
-// 统一标识处理任务的结构体
 type ProcessKey struct {
-	MD5     string // 图片hash
-	Format  string // 目标格式
-	Quality int    // jpg的质量(其它格式为0)
+	MD5     string
+	Format  string
+	Quality int
 }
 
-// processedTasks 记录已处理过的任务
 var (
+	version    = "v0.0.1"
 	queue      = make(map[ProcessKey]string) // 任务key -> filename
 	statusMap  = make(map[ProcessKey]string) // 任务key -> status
 	queueMutex = &sync.Mutex{}
@@ -57,15 +53,18 @@ var (
 
 type Config struct {
 	Server struct {
-		Port int `mapstructure:"port"`
+		Port      int    `mapstructure:"port"`
+		OutputDir string `mapstructure:"output_dir"`
 	} `mapstructure:"server"`
 	Upload struct {
 		MaxUploadSize      string `mapstructure:"max_upload_size"`
 		MaxConcurrentTasks int    `mapstructure:"max_concurrent_tasks"`
 	} `mapstructure:"upload"`
+	Download struct {
+		DownloadUrl string `mapstructure:"download_url"`
+	} `mapstructure:"download"`
 }
 
-// WebSocket 消息体
 type WSUploadRequest struct {
 	Filename string `json:"filename"`
 	Format   string `json:"format"`
@@ -93,9 +92,18 @@ func main() {
 		BodyLimit: int(MaxUploadSizeBytes),
 	})
 
+	app.Get("/", func(c *fiber.Ctx) error {
+		response := fiber.Map{
+			"version":               version,
+			"download_url":          AppConfig.Download.DownloadUrl,
+			"max_upload_size_bytes": MaxUploadSizeBytes,
+			"max_concurrent_tasks":  AppConfig.Upload.MaxConcurrentTasks,
+		}
+		return c.JSON(response)
+	})
+
 	app.Get("/ws", websocket.New(WebSocketHandler))
 
-	// 优化后的上传接口
 	app.Post("/upload", func(c *fiber.Ctx) error {
 		fileHeader, err := c.FormFile("picture")
 		if err != nil {
@@ -122,7 +130,12 @@ func main() {
 		if err != nil {
 			return c.Status(fiber.StatusInternalServerError).SendString("Failed to open file")
 		}
-		defer file.Close()
+		defer func(file multipart.File) {
+			err := file.Close()
+			if err != nil {
+
+			}
+		}(file)
 
 		inputBuffer, err := io.ReadAll(file)
 		if err != nil {
@@ -163,7 +176,6 @@ func main() {
 	app.Get("/queue/:md5", func(c *fiber.Ctx) error {
 		md5Str := c.Params("md5")
 		queueMutex.Lock()
-		// 查找所有相关key
 		var items []fiber.Map
 		for k, filename := range queue {
 			if k.MD5 == md5Str {
@@ -262,11 +274,13 @@ func main() {
 	log.Fatal(app.Listen(addr))
 }
 
-// ===========================
-// WebSocket 优化
-// ===========================
 func WebSocketHandler(c *websocket.Conn) {
-	defer c.Close()
+	defer func(c *websocket.Conn) {
+		err := c.Close()
+		if err != nil {
+
+		}
+	}(c)
 	writeLock := &sync.Mutex{}
 
 	for {
@@ -392,10 +406,6 @@ func wsWriteJSON(lock *sync.Mutex, c *websocket.Conn, v any) {
 	_ = c.WriteJSON(v)
 }
 
-// ===========================
-// 处理逻辑
-// ===========================
-
 func processWebPWithBimg(buf []byte) ([]byte, error) {
 	options := bimg.Options{
 		Quality:       80,
@@ -438,9 +448,6 @@ func processPNGWithPngquant(input []byte) ([]byte, error) {
 	return out.Bytes(), nil
 }
 
-// ===========================
-// 辅助函数
-// ===========================
 func ensureOutputDir() error {
 	return os.MkdirAll("output", os.ModePerm)
 }
@@ -474,7 +481,6 @@ func normalizeFormat(f string) string {
 	return ff
 }
 
-// 输出文件名优化
 func outputPathForKey(key ProcessKey) string {
 	if key.Format == "jpg" {
 		return fmt.Sprintf("output/%s.jpg_%d", key.MD5, key.Quality)
@@ -482,7 +488,6 @@ func outputPathForKey(key ProcessKey) string {
 	return fmt.Sprintf("output/%s.%s", key.MD5, key.Format)
 }
 
-// 任务处理
 func processTask(key ProcessKey, buffer []byte) {
 	taskSemaphore <- struct{}{}
 	defer func() { <-taskSemaphore }()
@@ -535,8 +540,10 @@ func loadConfig() {
 	viper.SetConfigFile(*configFile)
 	viper.SetConfigType("yaml")
 	viper.SetDefault("server.port", 8080)
+	viper.SetDefault("server.output_dir", "output")
 	viper.SetDefault("upload.max_upload_size", "10MB")
 	viper.SetDefault("upload.max_concurrent_tasks", 3)
+	viper.SetDefault("download.download_url", "download/")
 
 	if err := viper.ReadInConfig(); err != nil {
 		log.Printf("Config read warning: %v (using defaults if missing)", err)
