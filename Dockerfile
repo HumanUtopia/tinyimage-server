@@ -1,6 +1,5 @@
 FROM golang:1.24.6 AS builder
 
-# 安装 libvips 依赖
 RUN apt-get update && apt-get install -y \
     libvips-dev \
     pkg-config \
@@ -8,17 +7,20 @@ RUN apt-get update && apt-get install -y \
     pngquant
 
 WORKDIR /app
+COPY go.mod go.sum ./
+RUN go mod download
 COPY . .
-ENV CGO_ENABLED=0
-# 编译 Go 项目
+
+ENV CGO_ENABLED=1
 RUN go build -o tinyimage-server .
 
-# 生产镜像
-FROM alpine
+FROM alpine:3.20
 
-RUN apk --update --no-cache add --no-cache vips-dev pngquant && rm -rf /var/cache/apk/*
+RUN apk add --no-cache vips pngquant
 
 COPY --from=builder /app/tinyimage-server /usr/local/bin/tinyimage-server
+RUN mkdir -p /config
+COPY --from=builder /app/config.yaml /config/config.yaml
 
 EXPOSE 8080
-ENTRYPOINT ["tinyimage-server"]
+ENTRYPOINT ["/usr/local/bin/tinyimage-server", "--config", "/config/config.yaml"]
