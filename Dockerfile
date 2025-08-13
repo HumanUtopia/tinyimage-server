@@ -9,9 +9,9 @@ RUN apt-get update && apt-get install -y \
 
 WORKDIR /app
 COPY . .
-
+ENV CGO_ENABLED=0
 # 编译 Go 项目
-RUN go build -o image-compressor .
+RUN go build -o tinyimage-server .
 
 # 生产镜像
 FROM alpine
