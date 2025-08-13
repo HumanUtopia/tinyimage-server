@@ -1,10 +1,6 @@
-FROM golang:1.24.6 AS builder
+FROM golang:1.24.6-alpine AS builder
 
-RUN apt-get update && apt-get install -y \
-    libvips-dev \
-    pkg-config \
-    build-essential \
-    pngquant
+RUN apk add --no-cache build-base pkgconfig vips-dev pngquant
 
 WORKDIR /app
 COPY go.mod go.sum ./
@@ -12,6 +8,7 @@ RUN go mod download
 COPY . .
 
 ENV CGO_ENABLED=1
+ENV CC=musl-gcc
 RUN go build -o tinyimage-server .
 
 FROM alpine:3.20
