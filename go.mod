@@ -1,4 +1,4 @@
-module tinyimage-server
+module github.com/humanutopia/tinyimage-server
 
 go 1.24.1
 

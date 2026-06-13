@@ -5,7 +5,7 @@ RUN apt-get update && apt-get install -y \
     libvips-dev \
     pkg-config \
     build-essential \
-    pngquant
+    && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 COPY go.mod go.sum ./
@@ -13,18 +13,22 @@ RUN go mod download
 COPY . .
 
 ENV CGO_ENABLED=1
-RUN go build -o tinyimage-server .
+RUN go build -o tinyimage-server ./cmd/main.go
 
 FROM debian:stable-slim
 
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
-        libvips-dev \
+        libvips \
         pngquant \
     && rm -rf /var/lib/apt/lists/*
 
 COPY --from=builder /app/tinyimage-server /usr/local/bin/tinyimage-server
 RUN mkdir -p /config
 COPY --from=builder /app/config.yaml /config/config.yaml
+
+# 创建输出目录
+RUN mkdir -p /app/output
+
 EXPOSE 8080
 ENTRYPOINT ["/usr/local/bin/tinyimage-server", "--config", "/config/config.yaml"]
