@@ -5,7 +5,7 @@ RUN apt-get update && apt-get install -y \
     libvips-dev \
     pkg-config \
     build-essential \
-    pngquant
+    && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 COPY go.mod go.sum ./
@@ -19,7 +19,7 @@ FROM debian:stable-slim
 
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
-        libvips-dev \
+        libvips \
         pngquant \
     && rm -rf /var/lib/apt/lists/*
 

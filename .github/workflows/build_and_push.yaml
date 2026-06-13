@@ -36,3 +36,7 @@ jobs:
           push: true
           tags: ghcr.io/${{ env.OWNER_LC }}/tinyimage-server:latest
           platforms: linux/amd64,linux/arm64,linux/arm/v7,linux/s390x
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          provenance: false   # 可选，加快构建
+          sbom: false         # 可选，加快构建
