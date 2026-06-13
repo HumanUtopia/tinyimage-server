@@ -70,8 +70,8 @@ jobs:
             ${{ secrets.DOCKERHUB_USERNAME }}/tinyimage-server:tmp-${{ env.SHA_SHORT }}-${{ env.TAG_SUFFIX }}
           platforms: ${{ matrix.platform }}
           # 关键改进：使用 registry 缓存（支持跨架构共享��
-          cache-from: type=registry,ref=ghcr.io/${{ env.OWNER_LC }}/tinyimage-server:buildcache
-          cache-to: type=registry,ref=ghcr.io/${{ env.OWNER_LC }}/tinyimage-server:buildcache,mode=max
+          cache-from: type=gha,scope=${{ matrix.platform }}
+          cache-to: type=gha,scope=${{ matrix.platform }},mode=max
           provenance: false
           sbom: false
 
