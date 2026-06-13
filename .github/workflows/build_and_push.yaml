@@ -1,4 +1,4 @@
-name: Build and Publish Multi-Platform Docker Image
+name: Build and Publish Multi-Platform Docker Image (Parallel)
 
 on:
   push:
@@ -6,37 +6,100 @@ on:
   workflow_dispatch:
 
 jobs:
-  build-and-push:
+  # 每个平台单独构建
+  build:
     runs-on: ubuntu-latest
     permissions:
       contents: read
       packages: write
-
+    strategy:
+      matrix:
+        platform:
+          - linux/amd64
+          - linux/arm64
+          - linux/arm/v7
+          - linux/s390x
     steps:
       - name: Checkout code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Set lowercase owner name
         run: echo "OWNER_LC=${GITHUB_REPOSITORY_OWNER,,}" >> $GITHUB_ENV
+
+      - name: Set tag suffix based on platform
+        run: |
+          case "${{ matrix.platform }}" in
+            linux/amd64)   SUFFIX="amd64" ;;
+            linux/arm64)   SUFFIX="arm64" ;;
+            linux/arm/v7)  SUFFIX="armv7" ;;
+            linux/s390x)   SUFFIX="s390x" ;;
+            *)             SUFFIX="unknown" ;;
+          esac
+          echo "TAG_SUFFIX=${SUFFIX}" >> $GITHUB_ENV
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
       - name: Log in to GHCR
-        uses: docker/login-action@v2
+        uses: docker/login-action@v3
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Build and push Docker image (multi-platform)
-        uses: docker/build-push-action@v4
+      - name: Build and push for ${{ matrix.platform }}
+        uses: docker/build-push-action@v5
         with:
           context: .
           push: true
-          tags: ghcr.io/${{ env.OWNER_LC }}/tinyimage-server:latest
-          platforms: linux/amd64,linux/arm64,linux/arm/v7,linux/s390x
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-          provenance: false   # 可选，加快构建
-          sbom: false         # 可选，加快构建
+          tags: |
+            ghcr.io/${{ env.OWNER_LC }}/tinyimage-server:latest-${{ env.TAG_SUFFIX }}
+          platforms: ${{ matrix.platform }}
+          # 使用 GitHub 缓存，每个平台独立缓存（通过 key 区分）
+          cache-from: type=gha,scope=${{ matrix.platform }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.platform }}
+          provenance: false
+          sbom: false
+
+  # 合并 manifest 并推送最终的 multi-platform `:latest` 标签
+  merge-manifest:
+    runs-on: ubuntu-latest
+    needs: build   # 等待所有 build job 完成
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Set lowercase owner name
+        run: echo "OWNER_LC=${GITHUB_REPOSITORY_OWNER,,}" >> $GITHUB_ENV
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Enable docker manifest experimental
+        run: |
+          mkdir -p ~/.docker
+          echo '{"experimental":"enabled"}' > ~/.docker/config.json
+
+      - name: Create and push multi-platform manifest
+        run: |
+          IMAGE_BASE="ghcr.io/$OWNER_LC/tinyimage-server"
+          # 从 ${{ needs.build }} 获取所有构建过的平台后缀（硬编码也可）
+          MANIFEST_TAGS=""
+          for suffix in amd64 arm64 armv7 s390x; do
+            MANIFEST_TAGS="$MANIFEST_TAGS $IMAGE_BASE:latest-$suffix"
+          done
+          docker manifest create $IMAGE_BASE:latest $MANIFEST_TAGS
+          docker manifest push $IMAGE_BASE:latest
+
+      # 可选：清理不再需要的单独平台标签（避免仓库过乱）
+      - name: Delete per-platform tags (optional)
+        run: |
+          IMAGE_BASE="ghcr.io/$OWNER_LC/tinyimage-server"
+          for suffix in amd64 arm64 armv7 s390x; do
+            skopeo delete docker://$IMAGE_BASE:latest-$suffix || true
+          done
+        continue-on-error: true
