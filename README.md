@@ -36,6 +36,7 @@ The easiest way to deploy this server is by using the provided `Dockerfile` and 
     * **`server.output_dir`**: The directory to save processed images.
     * **`upload.max_upload_size`**: The maximum file size for uploads (e.g., `10MB`, `500KB`).
     * **`upload.max_concurrent_tasks`**: The number of concurrent image processing workers.
+    * **`upload.max_age`**: The maximum number of hours an uploaded image is kept before being automatically deleted.
 
     <!-- end list -->
 
@@ -48,6 +49,7 @@ The easiest way to deploy this server is by using the provided `Dockerfile` and 
     upload:
       max_upload_size: 10MB
       max_concurrent_tasks: 3
+      max_age: 24
 
     download:
       download_url: "download/"
@@ -116,7 +118,8 @@ curl http://localhost:8080/
   "version": "v0.0.1",
   "download_url": "download/",
   "max_upload_size_bytes": "10MB",
-  "max_concurrent_tasks": 3
+  "max_concurrent_tasks": 3,
+  "max_age": 24
 }
 ```
 
