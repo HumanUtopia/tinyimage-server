@@ -1,12 +1,16 @@
 name: Build and Publish Multi-Platform Docker Image (Parallel)
 
 on:
+  # 监听 Master 分支的 Push 事件
   push:
     branches: [master]
+  # 监听 Release 发布事件
+  release:
+    types: [published]
+  # 支持手动触发
   workflow_dispatch:
 
 jobs:
-  # 每个平台单独构建
   build:
     runs-on: ubuntu-latest
     permissions:
@@ -26,8 +30,9 @@ jobs:
       - name: Set lowercase owner name
         run: echo "OWNER_LC=${GITHUB_REPOSITORY_OWNER,,}" >> $GITHUB_ENV
 
-      - name: Set tag suffix based on platform
+      - name: Set Environment Variables
         run: |
+          # 1. 解析架构后缀
           case "${{ matrix.platform }}" in
             linux/amd64)   SUFFIX="amd64" ;;
             linux/arm64)   SUFFIX="arm64" ;;
@@ -36,11 +41,14 @@ jobs:
             *)             SUFFIX="unknown" ;;
           esac
           echo "TAG_SUFFIX=${SUFFIX}" >> $GITHUB_ENV
+          
+          # 2. 提取当前 Git 提交的短哈希，用作单架构临时镜像的唯一标识
+          SHA_SHORT=$(echo "${{ github.sha }}" | cut -c1-7)
+          echo "SHA_SHORT=${SHA_SHORT}" >> $GITHUB_ENV
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      # 1. 登录 GHCR
       - name: Log in to GHCR
         uses: docker/login-action@v3
         with:
@@ -48,22 +56,21 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      # 2. 登录 Docker Hub（需要在 GitHub Repository Settings -> Secrets 中配置 DOCKERHUB_USERNAME 和 DOCKERHUB_TOKEN）
       - name: Log in to Docker Hub
         uses: docker/login-action@v3
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-      # 3. 同时推送到两个 Registry 的单架构 Tag
+      # 推送带有 Commit SHA 后缀的临时单架构镜像
       - name: Build and push for ${{ matrix.platform }}
         uses: docker/build-push-action@v5
         with:
           context: .
           push: true
           tags: |
-            ghcr.io/${{ env.OWNER_LC }}/tinyimage-server:latest-${{ env.TAG_SUFFIX }}
-            ${{ secrets.DOCKERHUB_USERNAME }}/tinyimage-server:latest-${{ env.TAG_SUFFIX }}
+            ghcr.io/${{ env.OWNER_LC }}/tinyimage-server:tmp-${{ env.SHA_SHORT }}-${{ env.TAG_SUFFIX }}
+            ${{ secrets.DOCKERHUB_USERNAME }}/tinyimage-server:tmp-${{ env.SHA_SHORT }}-${{ env.TAG_SUFFIX }}
           platforms: ${{ matrix.platform }}
           cache-from: type=gha,scope=${{ matrix.platform }}
           cache-to: type=gha,mode=max,scope=${{ matrix.platform }}
@@ -81,6 +88,37 @@ jobs:
       - name: Set lowercase owner name
         run: echo "OWNER_LC=${GITHUB_REPOSITORY_OWNER,,}" >> $GITHUB_ENV
 
+      # 解析触发场景并动态生成需要合并的目标 Tags 命令参数
+      - name: Generate Target Tags Flags
+        id: tags_generator
+        run: |
+          # 1. 获取短哈希用于寻找上一步的临时镜像
+          SHA_SHORT=$(echo "${{ github.sha }}" | cut -c1-7)
+          echo "SHA_SHORT=${SHA_SHORT}" >> $GITHUB_ENV
+          
+          # 2. 初始化用于 docker buildx imagetools 的 -t 参数行
+          GHCR_TAG_FLAGS=""
+          DH_TAG_FLAGS=""
+          
+          GHCR_BASE="ghcr.io/$OWNER_LC/tinyimage-server"
+          DH_BASE="${{ secrets.DOCKERHUB_USERNAME }}/tinyimage-server"
+          
+          # 判断如果是 Release 触发
+          if [ "${{ github.event_name }}" = "release" ]; then
+            REL_TAG="${{ github.event.release.tag_name }}"
+            GHCR_TAG_FLAGS="-t $GHCR_BASE:latest -t $GHCR_BASE:$REL_TAG"
+            DH_TAG_FLAGS="-t $DH_BASE:latest -t $DH_BASE:$REL_TAG"
+          # 如果是 Master 分支 Push 触发（或者手动触发）
+          else
+            BRANCH_TAG="${{ github.ref_name }}" # 这会直接拿到 "master"
+            GHCR_TAG_FLAGS="-t $GHCR_BASE:$BRANCH_TAG"
+            DH_TAG_FLAGS="-t $DH_BASE:$BRANCH_TAG"
+          fi
+          
+          # 将生成的参数链传递给后续步骤
+          echo "ghcr_flags=$GHCR_TAG_FLAGS" >> $GITHUB_OUTPUT
+          echo "dh_flags=$DH_TAG_FLAGS" >> $GITHUB_OUTPUT
+
       - name: Log in to GHCR
         uses: docker/login-action@v3
         with:
@@ -97,30 +135,33 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
+      # 根据上一步动态计算出的参数链进行 Manifest 合并
       - name: Create and push multi-platform manifest
         run: |
-          # 合并 GHCR Manifest
           GHCR_BASE="ghcr.io/$OWNER_LC/tinyimage-server"
-          docker buildx imagetools create -t $GHCR_BASE:latest \
-            $GHCR_BASE:latest-amd64 \
-            $GHCR_BASE:latest-arm64 \
-            $GHCR_BASE:latest-armv7 \
-            $GHCR_BASE:latest-s390x
+          DH_BASE="${{ secrets.DOCKERHUB_USERNAME }}/tinyimage-server"
+          
+          # 合并 GHCR Manifest
+          docker buildx imagetools create ${{ steps.tags_generator.outputs.ghcr_flags }} \
+            $GHCR_BASE:tmp-${{ env.SHA_SHORT }}-amd64 \
+            $GHCR_BASE:tmp-${{ env.SHA_SHORT }}-arm64 \
+            $GHCR_BASE:tmp-${{ env.SHA_SHORT }}-armv7 \
+            $GHCR_BASE:tmp-${{ env.SHA_SHORT }}-s390x
             
           # 合并 Docker Hub Manifest
-          DH_BASE="${{ secrets.DOCKERHUB_USERNAME }}/tinyimage-server"
-          docker buildx imagetools create -t $DH_BASE:latest \
-            $DH_BASE:latest-amd64 \
-            $DH_BASE:latest-arm64 \
-            $DH_BASE:latest-armv7 \
-            $DH_BASE:latest-s390x
+          docker buildx imagetools create ${{ steps.tags_generator.outputs.dh_flags }} \
+            $DH_BASE:tmp-${{ env.SHA_SHORT }}-amd64 \
+            $DH_BASE:tmp-${{ env.SHA_SHORT }}-arm64 \
+            $DH_BASE:tmp-${{ env.SHA_SHORT }}-armv7 \
+            $DH_BASE:tmp-${{ env.SHA_SHORT }}-s390x
 
+      # 根据独一无二的 SHA 标签清理掉单架构临时镜像
       - name: Delete per-platform tags (optional)
         run: |
           GHCR_BASE="ghcr.io/$OWNER_LC/tinyimage-server"
           DH_BASE="${{ secrets.DOCKERHUB_USERNAME }}/tinyimage-server"
           for suffix in amd64 arm64 armv7 s390x; do
-            skopeo delete docker://$GHCR_BASE:latest-$suffix || true
-            skopeo delete docker://$DH_BASE:latest-$suffix || true
+            skopeo delete docker://$GHCR_BASE:tmp-${{ env.SHA_SHORT }}-$suffix || true
+            skopeo delete docker://$DH_BASE:tmp-${{ env.SHA_SHORT }}-$suffix || true
           done
         continue-on-error: true
