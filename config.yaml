@@ -5,6 +5,7 @@ server:
 upload:
   max_upload_size: 10MB
   max_concurrent_tasks: 3
+  max_age: 24
 
 download:
   download_url: "download/"
