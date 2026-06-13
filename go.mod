@@ -1,4 +1,4 @@
-module tinyimage-server
+module github.com/humanutopia/tinyimage-server
 
 go 1.24.1
 
@@ -12,7 +12,7 @@ require (
 
 require (
 	github.com/andybalholm/brotli v1.1.0 // indirect
-	github.com/fasthttp/websocket v1.5.3 // indirect
+	github.com/fasthttp/websocket v1.5.3internal/handler // indirect
 	github.com/fsnotify/fsnotify v1.8.0 // indirect
 	github.com/go-viper/mapstructure/v2 v2.2.1 // indirect
 	github.com/google/uuid v1.6.0 // indirect

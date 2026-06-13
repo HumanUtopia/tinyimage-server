@@ -5,7 +5,7 @@ import (
 	"os"
 	"strings"
 
-	"image-processor/internal/model"
+	"github.com/humanutopia/tinyimage-server/internal/model"
 )
 
 func IsSupportedFormat(f string) bool {

@@ -10,10 +10,10 @@ import (
 
 	"github.com/gofiber/fiber/v2"
 
-	"image-processor/config"
-	"image-processor/internal/model"
-	"image-processor/internal/service"
-	"image-processor/internal/utils"
+	"github.com/humanutopia/tinyimage-server/config"
+	"github.com/humanutopia/tinyimage-server/internal/model"
+	"github.com/humanutopia/tinyimage-server/internal/service"
+	"github.com/humanutopia/tinyimage-server/internal/utils"
 )
 
 const Version = "v0.0.3"

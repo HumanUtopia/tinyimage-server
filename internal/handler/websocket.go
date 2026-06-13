@@ -12,10 +12,10 @@ import (
 	"github.com/gofiber/websocket/v2"
 	"github.com/h2non/bimg"
 
-	"image-processor/config"
-	"image-processor/internal/model"
-	"image-processor/internal/service"
-	"image-processor/internal/utils"
+	"github.com/humanutopia/tinyimage-server/config"
+	"github.com/humanutopia/tinyimage-server/internal/model"
+	"github.com/humanutopia/tinyimage-server/internal/service"
+	"github.com/humanutopia/tinyimage-server/internal/utils"
 )
 
 func WebSocketHandler(c *websocket.Conn) {

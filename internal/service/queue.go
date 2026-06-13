@@ -3,7 +3,7 @@ package service
 import (
 	"sync"
 
-	"image-processor/internal/model"
+	"github.com/humanutopia/tinyimage-server/internal/model"
 )
 
 var (

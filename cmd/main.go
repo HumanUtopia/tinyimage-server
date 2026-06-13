@@ -2,10 +2,10 @@ package main
 
 import (
 	"fmt"
-	"image-processor/config"
-	"image-processor/internal/handler"
-	"image-processor/internal/middleware"
-	"image-processor/internal/service"
+	"github.com/humanutopia/tinyimage-server/config"
+	"github.com/humanutopia/tinyimage-server/internal/handler"
+	"github.com/humanutopia/tinyimage-server/internal/middleware"
+	"github.com/humanutopia/tinyimage-server/internal/service"
 	"log"
 
 	_ "golang.org/x/image/bmp"

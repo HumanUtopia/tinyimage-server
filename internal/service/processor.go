@@ -11,8 +11,8 @@ import (
 
 	"github.com/h2non/bimg"
 
-	"image-processor/internal/model"
-	"image-processor/internal/utils"
+	"github.com/humanutopia/tinyimage-server/internal/model"
+	"github.com/humanutopia/tinyimage-server/internal/utils"
 )
 
 func ProcessWebPWithBimg(buf []byte) ([]byte, error) {

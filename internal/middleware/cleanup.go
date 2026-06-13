@@ -5,7 +5,7 @@ import (
 	"os"
 	"time"
 
-	"image-processor/config"
+	"github.com/humanutopia/tinyimage-server/config"
 )
 
 func StartCleanupRoutine() {
