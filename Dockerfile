@@ -13,7 +13,7 @@ RUN go mod download
 COPY . .
 
 ENV CGO_ENABLED=1
-RUN go build -o tinyimage-server .
+RUN go build -o tinyimage-server ./cmd/main.go
 
 FROM debian:stable-slim
 
@@ -26,5 +26,9 @@ RUN apt-get update && \
 COPY --from=builder /app/tinyimage-server /usr/local/bin/tinyimage-server
 RUN mkdir -p /config
 COPY --from=builder /app/config.yaml /config/config.yaml
+
+# 创建输出目录
+RUN mkdir -p /app/output
+
 EXPOSE 8080
 ENTRYPOINT ["/usr/local/bin/tinyimage-server", "--config", "/config/config.yaml"]
